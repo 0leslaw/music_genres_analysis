@@ -1,0 +1,27 @@
+possible features:
+Xmean BPM (MEAN OR MEDIAN???)
+Xsong length
+Xtempo variance
+Xmedian spectral centroid - median of weighted means of freq
+Xmedian spectral rolloff - median of freq thresholds under which there is 85% of volume
+repetitiveness
+most common Hz range/s?
+notes set length
+key changes
+chord progressions
+most common rhythmic pattern for a measure (bar)
+Xloudness dynamics (has to take mean dynamic level for a measure
+
+possible targets:
+music genre
+dance-ability
+emotion
+
+
+Achieve:
+get to know more about complex genres such as stoner rock
+
+find similarities across genres
+
+find if one authors' pieces are more similar to each other or if they fall
+into different categories
