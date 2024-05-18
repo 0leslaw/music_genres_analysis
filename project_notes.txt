@@ -1,5 +1,5 @@
 possible features:
-Xmean BPM (MEAN OR MEDIAN???)
+Xmean BPM median
 Xsong length
 Xtempo variance
 Xmedian spectral centroid - median of weighted means of freq
