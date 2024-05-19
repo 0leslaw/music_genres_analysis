@@ -16,8 +16,19 @@ def extract_mfcc_features(path):
     raw_audio_data, sample_rate = librosa.load(path)
     return librosa.feature.mfcc(y=raw_audio_data, sr=sample_rate)
 
+
+def get_percussive_presence(y_harmonic, y_percussive, sample_rate):
+    return (statistics.median(librosa.feature.rms(y=y_percussive, hop_length=512)[0])/
+            statistics.median(librosa.feature.rms(y=y_harmonic, hop_length=512)[0]))
+
+
+def get_median_chord_progression():
+    pass
+
+
 def extract_custom_features(path):
     features = {}
+
     raw_audio_data, sample_rate = librosa.load(path)
     raw_audio_data, _ = librosa.effects.trim(raw_audio_data)
     # Estimate the tempo and get the beat frames
@@ -31,6 +42,8 @@ def extract_custom_features(path):
     features['max_spectral_centroid'] = get_max_spectral_centroid(y_harmonic, sample_rate, features['seconds_duration'])
     features['median_spectral_rolloff'] = get_median_spectral_rolloff(raw_audio_data, sample_rate)
     features['key_changes'] = get_key_changes_broad_estimator(y_harmonic, sample_rate)
+    features['median_chord_progression'] = get_median_chord_progression()
+    features['percussive_presence'] = get_percussive_presence(y_harmonic, y_percussive, sample_rate)
     return features
 
 @time_it
@@ -95,6 +108,7 @@ def get_tempo_variation_and_median(y, sr, divisions=5):
     a variable tempo we don't know how to slice the piece
     into measures"""
     # TODO maybe change divs into interval
+    # FIXME IF NOT GOOD REMOVE OR MODIFY (time consuming)
     tempos = []
     y_interval = len(y)//divisions
     for i in range(divisions):
