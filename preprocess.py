@@ -1,5 +1,9 @@
+import math
 import os
 import random
+
+import stumpy
+
 from utils import time_it, RandomIter
 import librosa
 import librosa.display
@@ -8,7 +12,6 @@ import matplotlib.pyplot as plt
 import statistics
 import pandas as pd
 import numpy as np
-
 import project_globals
 
 
@@ -17,9 +20,25 @@ def extract_mfcc_features(path):
     return librosa.feature.mfcc(y=raw_audio_data, sr=sample_rate)
 
 
-def get_percussive_presence(y_harmonic, y_percussive, sample_rate):
+def get_percussive_presence(y_harmonic, y_percussive):
     return (statistics.median(librosa.feature.rms(y=y_percussive, hop_length=512)[0])/
             statistics.median(librosa.feature.rms(y=y_harmonic, hop_length=512)[0]))
+
+
+def get_repetitiveness(y, sr):
+    bar_length_in_frames = librosa.time_to_frames(times=get_bar_length(y, sr), sr=sr)
+    notes = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=bar_length_in_frames//16)
+    start_note = max(y[bar_length_in_frames:5*bar_length_in_frames])
+
+    measure_patterns = {}
+    for measure in range(20):
+        pattern = []
+        for beat in range(16):
+            pattern.append(np.argmax(notes[:, start_note//16+measure*16+beat]))
+        measure_patterns[measure] = pattern
+    print(measure_patterns)
+    return len(set(measure_patterns.values()))
+
 
 
 def get_median_chord_progression():
@@ -37,13 +56,13 @@ def extract_custom_features(path):
     y_harmonic, y_percussive = librosa.effects.hpss(y=raw_audio_data)
     features['tempo_variation'] = stdev_tempo
     features['BPM'] = median_tempo
+    features['repetitiveness'] = get_repetitiveness(raw_audio_data, sample_rate)
     features['seconds_duration'] = librosa.get_duration(y=raw_audio_data, sr=sample_rate)
     features['loudness_variation'] = get_loudness_variation_locally(y=raw_audio_data)
     features['max_spectral_centroid'] = get_max_spectral_centroid(y_harmonic, sample_rate, features['seconds_duration'])
     features['median_spectral_rolloff'] = get_median_spectral_rolloff(raw_audio_data, sample_rate)
     features['key_changes'] = get_key_changes_broad_estimator(y_harmonic, sample_rate)
-    features['median_chord_progression'] = get_median_chord_progression()
-    features['percussive_presence'] = get_percussive_presence(y_harmonic, y_percussive, sample_rate)
+    features['percussive_presence'] = get_percussive_presence(y_harmonic, y_percussive)
     return features
 
 @time_it
@@ -70,6 +89,8 @@ def get_max_spectral_centroid(y, sr, song_duration):
     max_index = spectral_centroid.argmax()  # Index of maximum spectral centroid
     max_time = librosa.frames_to_time(max_index, sr=sr)  # Convert index to time (in seconds)
     return max_time / song_duration  # Convert to percentage of song duration@time_it
+
+
 def get_loudness_variation_entire_file(y, divisions=30):
     loudnesses = []
     # Calculate the RMS energy
@@ -103,7 +124,7 @@ def get_loudness_variation_locally(y, samples=5):
     return statistics.mean(loudnesses)
 
 @time_it
-def get_tempo_variation_and_median(y, sr, divisions=5):
+def get_tempo_variation_and_median(y, sr, divisions=5, beats_per_bar=4):
     """we can really only estimate this since assuming
     a variable tempo we don't know how to slice the piece
     into measures"""
@@ -115,8 +136,17 @@ def get_tempo_variation_and_median(y, sr, divisions=5):
         tempo, beat_frames = librosa.beat.beat_track(y=y[i*y_interval: (1+i)*y_interval], sr=sr)
         for sub_tempo in list(tempo):
             tempos.append(sub_tempo)
+
     return statistics.stdev(tempos), statistics.median(tempos)
 
+
+def get_bar_length(y, sr, beats_per_bar=4):
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+    beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+    beat_durations = np.diff(beat_times)
+    avg_beat_duration = np.mean(beat_durations)
+
+    return float(avg_beat_duration) * beats_per_bar
 
 def loudness_rms_visualise(y, sr):
     # Calculate the RMS energy
