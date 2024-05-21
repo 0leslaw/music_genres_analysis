@@ -1,9 +1,11 @@
 import math
 import os
 import random
+from functools import reduce
 
 import stumpy
 
+import utils
 from utils import time_it, RandomIter
 import librosa
 import librosa.display
@@ -25,26 +27,61 @@ def get_percussive_presence(y_harmonic, y_percussive):
             statistics.median(librosa.feature.rms(y=y_harmonic, hop_length=512)[0]))
 
 
+def get_most_common_hz(y_harmonic, sr):
+    stft = librosa.stft(y=y_harmonic)
+
+    max_hzs = []
+    for col in S_db.T:
+        max_hzs.append(np.argmax(col))
+    return statistics.median(max_hzs)
+
+
 def get_repetitiveness(y, sr):
-    bar_length_in_frames = librosa.time_to_frames(times=get_bar_length(y, sr), sr=sr)
-    notes = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=bar_length_in_frames//16)
-    start_note = max(y[bar_length_in_frames:5*bar_length_in_frames])
+    """
+    NOTE THIS WILL NOT BE ACCURATE FOR non 4/4 SIGNATURE
+    BUT IT STILL SHOULD BE A GOOD MEASUREMENT OF CHAOTIC
+    AND OVERALL PUT SONGS IN THE RIGHT BOX
+    :param y:
+    :param sr:
+    :return:
+    """
+    _, beat_indices = librosa.beat.beat_track(y=y, sr=sr)
+    print("stdev indices beat", statistics.stdev(np.diff(beat_indices).tolist()))
+    bar_length_in_512frames = math.floor(get_bar_length(y, sr))
+    sixteenth_note_length_in_samples = 512*bar_length_in_512frames//16
+    bar_length_in_samples = bar_length_in_512frames*512
+    
+    sixteenth_notes = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=512)
+    beat_indices = utils.insert_means_floored(beat_indices)
+    measure_patterns = []
+    pattern = []
+    i = 1
+    for beat_index in beat_indices:
+        pattern.append(np.argmax(sixteenth_notes[:, beat_index]))
+        if i % 8 == 0:
+            measure_patterns.append(pattern)
+            pattern = []
+            i = 0
+        i += 1
 
-    measure_patterns = {}
-    for measure in range(20):
-        pattern = []
-        for beat in range(16):
-            pattern.append(np.argmax(notes[:, start_note//16+measure*16+beat]))
-        measure_patterns[measure] = pattern
-    print(measure_patterns)
-    return len(set(measure_patterns.values()))
+
+    unique_patterns_proportion = len(utils.cluster_patterns(measure_patterns, similarity_threshold=0.70)) / len(measure_patterns)
+    return 1 - unique_patterns_proportion
+
+
+def get_note_above_threshold_set(y_harmonic, sample_rate, threshold=0.1):
+    notes = librosa.feature.chroma_stft(y=y_harmonic, sr=sample_rate)
+    accepted_notes_amm = 0
+    for row in notes:
+        note_occurances = reduce(lambda acc, x: acc+1 if x == 1 else acc, row)
+        note_proportion = note_occurances/len(notes[0])
+        if note_proportion > threshold:
+            accepted_notes_amm += 1
+    return accepted_notes_amm
 
 
 
-def get_median_chord_progression():
-    pass
-
-
+@time_it
 def extract_custom_features(path):
     features = {}
 
@@ -60,9 +97,13 @@ def extract_custom_features(path):
     features['seconds_duration'] = librosa.get_duration(y=raw_audio_data, sr=sample_rate)
     features['loudness_variation'] = get_loudness_variation_locally(y=raw_audio_data)
     features['max_spectral_centroid'] = get_max_spectral_centroid(y_harmonic, sample_rate, features['seconds_duration'])
-    features['median_spectral_rolloff'] = get_median_spectral_rolloff(raw_audio_data, sample_rate)
+    features['median_spectral_rolloff_high_pitch'] = get_median_spectral_rolloff_high_pitch(raw_audio_data, sample_rate)
+    features['median_spectral_rolloff_low_pitch'] = get_median_spectral_rolloff_low_pitch(raw_audio_data, sample_rate)
     features['key_changes'] = get_key_changes_broad_estimator(y_harmonic, sample_rate)
+    features['note_above_threshold_set'] = get_note_above_threshold_set(y_harmonic, sample_rate)
     features['percussive_presence'] = get_percussive_presence(y_harmonic, y_percussive)
+    features['accented_Hzs_median'] = get_most_common_hz(y_harmonic, sample_rate)
+
     return features
 
 @time_it
@@ -80,9 +121,18 @@ def get_key_changes_broad_estimator(y, sr):
             # add the note
             note_counts.append(estimated_note)
     return counter
+
+
 @time_it
-def get_median_spectral_rolloff(y, sr):
+def get_median_spectral_rolloff_high_pitch(y, sr):
     return statistics.median(librosa.feature.spectral_rolloff(y=y, sr=sr)[0])
+
+
+def get_median_spectral_rolloff_low_pitch(y, sr):
+    """this will find how low-pitched heavy is our song"""
+    return statistics.median(librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.2)[0])
+
+
 @time_it
 def get_max_spectral_centroid(y, sr, song_duration):
     spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]  # Compute spectral centroid
@@ -140,15 +190,27 @@ def get_tempo_variation_and_median(y, sr, divisions=5, beats_per_bar=4):
     return statistics.stdev(tempos), statistics.median(tempos)
 
 
-def get_bar_length(y, sr, beats_per_bar=4):
-    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-    beat_times = librosa.frames_to_time(beat_frames, sr=sr)
-    beat_durations = np.diff(beat_times)
+def get_bar_length(y, sr, beats_per_bar=4, as_512frames=True):
+    tempo, beat_units = librosa.beat.beat_track(y=y, sr=sr)
+    if not as_512frames:
+        beat_units = librosa.frames_to_time(beat_units, sr=sr)
+    beat_durations = np.diff(beat_units)
     avg_beat_duration = np.mean(beat_durations)
 
     return float(avg_beat_duration) * beats_per_bar
 
-def loudness_rms_visualise(y, sr):
+
+def visualise_spec(y, sr, name):
+    mel_spc = librosa.feature.melspectrogram(y=y, sr=sr)
+    mel_spc_db = librosa.amplitude_to_db(np.abs(mel_spc), ref=np.max)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    img = librosa.display.specshow(mel_spc_db, x_axis='time', y_axis='log', ax=ax)
+    ax.set_title('mel spectrogram for', name)
+    fig.colorbar(img, ax=ax, format=f'%0.2f')
+    plt.show()
+
+
+def visualise_loudness_rms(y, sr):
     # Calculate the RMS energy
     rms = librosa.feature.rms(y=y)[0]
 
@@ -210,15 +272,32 @@ def load_data_into_pd():
     data.set_index('song_name', inplace=True)
     return data
 
-if __name__ == '__main__':
-    # extract_custom_features('./Scene Seven I. The Dance of Eternity.mp3')
-    # loudness_rms_visualise(*librosa.load('./Scene Seven I. The Dance of Eternity.mp3'))
+
+def visualise_data():
+    categories_to_files = get_category_to_filename()
+    i = 0
+    for cat, files in categories_to_files.items():
+        for filename in files:
+            i += 1
+            if i > 1:
+                break
+            y, sr = librosa.load(filename)
+            visualise_spec(y, sr, cat)
+        i = 0
+
+def print_how_many_of_genre():
     sum = 0
     for cat, files in get_category_to_filename().items():
         sum += len(files)
         print(cat, len(files))
 
     print('total files:', sum)
-    data = load_data_into_pd()
+
+if __name__ == '__main__':
+    # extract_custom_features('./Scene Seven I. The Dance of Eternity.mp3')
+    # loudness_rms_visualise(*librosa.load('./Scene Seven I. The Dance of Eternity.mp3'))
+    print_how_many_of_genre()
+    visualise_data()
+    # data = load_data_into_pd()
 
     r =1
