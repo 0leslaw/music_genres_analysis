@@ -1,3 +1,5 @@
+import logging
+
 chords_notes_map = {
     ('C', 'E', 'G'): 'Cmaj',
     ('C#', 'F', 'G#'): 'C#maj',
@@ -37,3 +39,11 @@ chords_notes_map = {
     ('B', 'F#'): 'B5'
 }
 ALLOWED_FORMATS = ['.mp3', '.wav', '.flac']
+DATA_FRAME_PATH = './csv_data/songs_df'
+
+logging.basicConfig(
+    filename='./logs/extracting_times.log',  # File where logs will be written
+    level=logging.DEBUG,  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'  # Log format
+)
+logger = logging.getLogger(__name__)

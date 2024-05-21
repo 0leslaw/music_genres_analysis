@@ -1,3 +1,5 @@
+import csv
+from datetime import datetime
 import math
 import os
 import random
@@ -22,20 +24,23 @@ def extract_mfcc_features(path):
     return librosa.feature.mfcc(y=raw_audio_data, sr=sample_rate)
 
 
+@time_it
 def get_percussive_presence(y_harmonic, y_percussive):
     return (statistics.median(librosa.feature.rms(y=y_percussive, hop_length=512)[0])/
             statistics.median(librosa.feature.rms(y=y_harmonic, hop_length=512)[0]))
 
 
+@time_it
 def get_most_common_hz(y_harmonic, sr):
-    stft = librosa.stft(y=y_harmonic)
-
+    mel_spc = librosa.feature.melspectrogram(y=y_harmonic, sr=sr)
+    mel_S_db = librosa.amplitude_to_db(mel_spc, ref=np.max)
     max_hzs = []
-    for col in S_db.T:
+    for col in mel_S_db.T:
         max_hzs.append(np.argmax(col))
     return statistics.median(max_hzs)
 
 
+@time_it
 def get_repetitiveness(y, sr):
     """
     NOTE THIS WILL NOT BE ACCURATE FOR non 4/4 SIGNATURE
@@ -64,11 +69,11 @@ def get_repetitiveness(y, sr):
             i = 0
         i += 1
 
-
     unique_patterns_proportion = len(utils.cluster_patterns(measure_patterns, similarity_threshold=0.70)) / len(measure_patterns)
     return 1 - unique_patterns_proportion
 
 
+@time_it
 def get_note_above_threshold_set(y_harmonic, sample_rate, threshold=0.1):
     notes = librosa.feature.chroma_stft(y=y_harmonic, sr=sample_rate)
     accepted_notes_amm = 0
@@ -78,7 +83,6 @@ def get_note_above_threshold_set(y_harmonic, sample_rate, threshold=0.1):
         if note_proportion > threshold:
             accepted_notes_amm += 1
     return accepted_notes_amm
-
 
 
 @time_it
@@ -106,6 +110,7 @@ def extract_custom_features(path):
 
     return features
 
+
 @time_it
 def get_key_changes_broad_estimator(y, sr):
     chroma_gram = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=sr*10)
@@ -128,6 +133,7 @@ def get_median_spectral_rolloff_high_pitch(y, sr):
     return statistics.median(librosa.feature.spectral_rolloff(y=y, sr=sr)[0])
 
 
+@time_it
 def get_median_spectral_rolloff_low_pitch(y, sr):
     """this will find how low-pitched heavy is our song"""
     return statistics.median(librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.2)[0])
@@ -141,6 +147,7 @@ def get_max_spectral_centroid(y, sr, song_duration):
     return max_time / song_duration  # Convert to percentage of song duration@time_it
 
 
+@time_it
 def get_loudness_variation_entire_file(y, divisions=30):
     loudnesses = []
     # Calculate the RMS energy
@@ -150,8 +157,6 @@ def get_loudness_variation_entire_file(y, divisions=30):
         slice = rms[i*y_interval:(i+1)*y_interval]
         loudnesses.append(statistics.mean(slice))
     return statistics.stdev(loudnesses)
-
-
 
 
 @time_it
@@ -166,12 +171,13 @@ def get_loudness_variation_locally(y, samples=5):
 
     loudnesses = []
     rms = librosa.feature.rms(y=y)[0]
-    y_interval = len(rms)//200
-    intervals_in_sample = 8
+    y_interval = len(rms)//50
+    intervals_in_sample = 4
     for i in RandomIter(samples, len(rms)//(y_interval*intervals_in_sample)):
         slice = [statistics.mean(rms[(j + i)*y_interval:(j + i+1)*y_interval]) for j in range(intervals_in_sample)]
         loudnesses.append(statistics.stdev(slice))
-    return statistics.mean(loudnesses)
+    return statistics.median_high(loudnesses)
+
 
 @time_it
 def get_tempo_variation_and_median(y, sr, divisions=5, beats_per_bar=4):
@@ -205,12 +211,14 @@ def visualise_spec(y, sr, name):
     mel_spc_db = librosa.amplitude_to_db(np.abs(mel_spc), ref=np.max)
     fig, ax = plt.subplots(figsize=(10, 5))
     img = librosa.display.specshow(mel_spc_db, x_axis='time', y_axis='log', ax=ax)
-    ax.set_title('mel spectrogram for', name)
+    ax.set_title('mel spectrogram for '+name)
     fig.colorbar(img, ax=ax, format=f'%0.2f')
-    plt.show()
+    nu_name = name+str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    plt.savefig('./plots/mel_spectrograms'+nu_name)
+    # plt.show()
 
 
-def visualise_loudness_rms(y, sr):
+def visualise_loudness_rms(y, sr, name):
     # Calculate the RMS energy
     rms = librosa.feature.rms(y=y)[0]
 
@@ -223,9 +231,10 @@ def visualise_loudness_rms(y, sr):
     plt.plot(t, rms, label='RMS Energy')
     plt.xlabel('Time (seconds)')
     plt.ylabel('RMS Energy (Loudness)')
-    plt.title('Loudness Over Time')
+    plt.title('Loudness Over Time for '+name)
     plt.grid(True)
     plt.legend()
+    plt.savefig('./plots/loudness_over_time/'+name+datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     plt.show()
 
 
@@ -252,7 +261,8 @@ def get_category_to_filename():
         categories_to_files[category] = get_all_files(os.path.join('./data', category))
     return categories_to_files
 
-def load_data_into_pd():
+
+def load_example_data_into_pd():
     categories_to_files = get_category_to_filename()
     rows_as_list_of_dicts = []
     i=0
@@ -273,6 +283,53 @@ def load_data_into_pd():
     return data
 
 
+def load_full_data_to_csv(csv_path, frequency_of_saving=10, do_overwrite=False, skipping_ind=None):
+    if os.path.exists(csv_path) and not do_overwrite:
+        raise ResourceWarning('overwriting a csv df cancelled')
+    categories_to_files = get_category_to_filename()
+    rows_as_list_of_dicts = []
+    i = 0
+    is_first = True
+    if do_overwrite:
+        is_first = False
+    skip = False
+    j = 0
+    for cat, files in categories_to_files.items():
+        try:
+            for filename in files:
+
+                if j!=459:
+                    j+=1
+                    continue
+
+                # for ind in skipping_ind:
+                #     if ind in filename:
+                #         skip = True
+                #         break
+                # if skip:
+                #     continue
+
+                if i == frequency_of_saving:
+                    data = pd.DataFrame(rows_as_list_of_dicts)
+                    data.set_index('song_name', inplace=True)
+                    if is_first:
+                        data.to_csv(csv_path)
+                        is_first = False
+                    else:
+                        data.to_csv(csv_path, mode='a', index=True, header=False)
+                    del data
+                    i = 0
+                    del rows_as_list_of_dicts
+                    rows_as_list_of_dicts = []
+                row_as_dict = extract_custom_features(filename)
+
+                row_as_dict.update({'target': cat, 'song_name': os.path.basename(filename)})
+                rows_as_list_of_dicts.append(row_as_dict)
+                i += 1
+        except:
+            print(filename, "EKSEPSZYN")
+
+
 def visualise_data():
     categories_to_files = get_category_to_filename()
     i = 0
@@ -282,7 +339,7 @@ def visualise_data():
             if i > 1:
                 break
             y, sr = librosa.load(filename)
-            visualise_spec(y, sr, cat)
+            visualise_loudness_rms(y, sr, cat)
         i = 0
 
 def print_how_many_of_genre():
@@ -293,11 +350,13 @@ def print_how_many_of_genre():
 
     print('total files:', sum)
 
-if __name__ == '__main__':
-    # extract_custom_features('./Scene Seven I. The Dance of Eternity.mp3')
-    # loudness_rms_visualise(*librosa.load('./Scene Seven I. The Dance of Eternity.mp3'))
-    print_how_many_of_genre()
-    visualise_data()
-    # data = load_data_into_pd()
 
-    r =1
+
+if __name__ == '__main__':
+    print_how_many_of_genre()
+    # visualise_data()
+    # data = load_example_data_into_pd()
+    # skipping = pd.read_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', index_col='song_name')
+    # skipping = skipping.index.tolist()
+
+    # load_full_data_to_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', do_overwrite=True)

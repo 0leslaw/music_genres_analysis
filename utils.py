@@ -1,6 +1,7 @@
 import random
 import time
 from functools import wraps
+import project_globals
 
 
 def time_it(func):
@@ -10,9 +11,10 @@ def time_it(func):
         result = func(*args, **kwargs)
         end_time = time.time()
         execution_time = end_time - start_time
-        print(f"Function '{func.__name__}' executed in {execution_time:.4f} seconds")
+        project_globals.logger.debug(f"Function '{func.__name__}' executed in {execution_time:.4f} seconds")
         return result
     return wrapper
+
 
 class RandomIter:
     def __init__(self, top_iter, rand_bound, seed=0):
@@ -30,6 +32,7 @@ class RandomIter:
             raise StopIteration
         self.index += 1
         return random.randint(0, self.rand_bound)
+
 
 def cluster_patterns(patterns: list[list[int]], similarity_threshold=0.8):
     clusters = [[pattern] for pattern in patterns]
@@ -52,8 +55,6 @@ def cluster_patterns(patterns: list[list[int]], similarity_threshold=0.8):
                         cluster_expanded = pattern_id
 
     return clusters
-
-
 
 
 def similarity_of_lists(list_1, list_2):
