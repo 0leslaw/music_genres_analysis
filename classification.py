@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from scipy.stats import probplot
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -53,13 +54,90 @@ def visualise_data(data):
                 plt.show()
 
 
+
+
+
+def visualise_conf_matrix():
+    # Plot the confusion matrix
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+
+    # Classification Report
+    class_report = classification_report(y_test, y_pred)
+    print('Classification Report:')
+    print(class_report)
+
+    # Confusion Matrix
+    conf_matrix = confusion_matrix(y_test, y_pred, labels=model.classes_)
+    print('Confusion Matrix:')
+    print(conf_matrix)
+
+    # Accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f'Accuracy: {accuracy}')
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=y_test.unique())
+    disp.plot(cmap=plt.cm.Blues)
+
+    plt.xticks(rotation=45)
+    plt.title("Confusion Matrix")
+    plt.xlabel("Predicted Label")
+    plt.tight_layout()
+    plt.ylabel("True Label")
+    plt.show()
+
+
+def visualise_feature_distribution_in_genres(data: pd.DataFrame):
+    # Group DataFrame by target variable
+    groups = data.groupby('target')
+
+    # Iterate over groups and compute histograms for each feature
+    for target, group_df in groups:
+        # Drop the target column
+        group_df = group_df.drop('target', axis=1)
+        # Iterate over features
+        for col in group_df.columns:
+            # if col != 'max_spectral_centroid':
+            #     continue
+            feature_values = group_df[col]  # Get values of the current feature
+
+            # Compute the histogram
+            min_val = feature_values.min()
+            max_val = feature_values.max()
+
+            # Automatically divide the range into 100 bins
+            bins = np.linspace(min_val, max_val, num=11)
+            hist, bin_edges = np.histogram(feature_values, bins=bins)
+
+            # Plot the histogram
+            plt.bar(bin_edges[:-1], hist, width=np.diff(bin_edges), align='edge')
+
+            # Customize plot
+            plt.title(f"Distribution of '{col}' in class '{target}'")
+            plt.xlabel("Feature Values")
+            plt.ylabel("Count")
+
+            # Reduce the number of ticks on the x-axis
+            ax = plt.gca()
+            ax.xaxis.set_major_locator(MaxNLocator(10))  # Set a maximum of 10 ticks on the x-axis
+
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+
+            # Save plot
+            plt.savefig('./plots/features_distribution_in_genres/'+col+target.__str__())
+            plt.close()
+
+
 if __name__ == '__main__':
     data = get_data()
     data = data[data['target'] != 'Queens of the Stone Age']
-    data = data[data['target'] != 'Rap']
-    to_drop = ['repetitiveness', 'max_spectral_centroid', 'median_spectral_rolloff_high_pitch',
-               'accented_Hzs_median', 'loudness_variation', 'note_above_threshold_set']
-    data.drop(to_drop, axis=1, inplace=True)
+    # data = data[data['target'] != 'Blues']
+    # data = data[data['target'] != 'Rap']
+    # to_drop = ['repetitiveness', 'median_spectral_rolloff_high_pitch',
+    #            'accented_Hzs_median', 'loudness_variation', 'note_above_threshold_set']
+    # data.drop(to_drop, axis=1, inplace=True)
+    # data = data[data['max_spectral_centroid'] < 0.9]
+    # data = data[data['max_spectral_centroid'] > 0.1]
     print(data.columns)
     # visualise_data(data)
 
@@ -77,21 +155,6 @@ if __name__ == '__main__':
     # Predict
     y_pred = model.predict(X_test)
 
+    visualise_conf_matrix()
 
-
-
-    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-
-    # Classification Report
-    class_report = classification_report(y_test, y_pred)
-    print('Classification Report:')
-    print(class_report)
-
-    # Confusion Matrix
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    print('Confusion Matrix:')
-    print(conf_matrix)
-
-    # Accuracy
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f'Accuracy: {accuracy}')
+    visualise_feature_distribution_in_genres(data)
