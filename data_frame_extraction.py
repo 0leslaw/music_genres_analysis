@@ -283,7 +283,7 @@ def load_example_data_into_pd():
     return data
 
 
-def load_full_data_to_csv(csv_path, frequency_of_saving=10, do_overwrite=False, skipping_ind=None):
+def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, do_overwrite=False, skipping_ind=None):
     if os.path.exists(csv_path) and not do_overwrite:
         raise ResourceWarning('overwriting a csv df cancelled')
     categories_to_files = get_category_to_filename()
@@ -295,6 +295,9 @@ def load_full_data_to_csv(csv_path, frequency_of_saving=10, do_overwrite=False, 
     skip = False
     j = 0
     for cat, files in categories_to_files.items():
+
+        if cat != 'Punk':
+            continue
         try:
             for filename in files:
 
@@ -327,7 +330,37 @@ def load_full_data_to_csv(csv_path, frequency_of_saving=10, do_overwrite=False, 
                 rows_as_list_of_dicts.append(row_as_dict)
                 i += 1
         except:
-            print(filename, "EKSEPSZYN")
+            print(filename, "EXCEPTION IN LOADING")
+
+
+def load_full_data_to_csv(csv_path, do_overwrite=True):
+    if os.path.exists(csv_path) and not do_overwrite:
+        raise ResourceWarning('overwriting a csv df cancelled')
+    categories_to_files = get_category_to_filename()
+    rows_as_list_of_dicts = []
+    i = 0
+    for cat, files in categories_to_files.items():
+
+        if cat != 'Punk':
+            continue
+        try:
+            for filename in files:
+                # for ind in skipping_ind:
+                #     if ind in filename:
+                #         skip = True
+                #         break
+                # if skip:
+                #     continue
+                row_as_dict = extract_custom_features(filename)
+
+                row_as_dict.update({'target': cat, 'song_name': os.path.basename(filename)})
+                rows_as_list_of_dicts.append(row_as_dict)
+                i += 1
+        except:
+            print(i, filename, "EXCEPTION IN LOADING")
+    data = pd.DataFrame(rows_as_list_of_dicts)
+    data.set_index('song_name', inplace=True)
+    data.to_csv(csv_path)
 
 
 def visualise_data():
@@ -359,4 +392,5 @@ if __name__ == '__main__':
     # skipping = pd.read_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', index_col='song_name')
     # skipping = skipping.index.tolist()
 
-    # load_full_data_to_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', do_overwrite=True)
+    # load_full_data_to_csv_frequent_saving(project_globals.DATA_FRAME_PATH + '2024-05-21_09-09-30', do_overwrite=True)
+    # load_full_data_to_csv(project_globals.DATA_FRAME_PATH + 'Punk', do_overwrite=True)

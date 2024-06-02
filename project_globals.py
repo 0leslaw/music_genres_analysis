@@ -47,3 +47,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'  # Log format
 )
 logger = logging.getLogger(__name__)
+
+ALL_FEATURES = ['tempo_variation', 'BPM', 'repetitiveness', 'seconds_duration',
+       'loudness_variation', 'max_spectral_centroid',
+       'median_spectral_rolloff_high_pitch',
+       'median_spectral_rolloff_low_pitch', 'key_changes',
+       'note_above_threshold_set', 'percussive_presence',
+       'accented_Hzs_median']

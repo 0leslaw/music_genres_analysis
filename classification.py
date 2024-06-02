@@ -5,6 +5,7 @@ from matplotlib.ticker import MaxNLocator
 from scipy.stats import probplot
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -30,14 +31,14 @@ def split_by_target_classes(data, test_ratio=0.2, seed=0) -> tuple[pd.DataFrame,
     return strat_train_set, strat_test_set
 
 
-def get_sets(data: pd.DataFrame):
-    train_set, test_set = split_by_target_classes(data)
+def get_sets(data: pd.DataFrame, seed=0):
+    train_set, test_set = split_by_target_classes(data, seed=seed)
     x_train, y_train = train_set.drop('target', axis=1), train_set['target'].copy()
     x_test, y_test = test_set.drop('target', axis=1), test_set['target'].copy()
     return x_train, y_train, x_test, y_test
 
 
-def get_data():
+def get_data_as_df():
     return pd.read_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', index_col='song_name')
 
 
@@ -54,12 +55,9 @@ def visualise_data(data):
                 plt.show()
 
 
-
-
-
-def visualise_conf_matrix():
+def visualise_conf_matrix(y_test, y_pred):
     # Plot the confusion matrix
-    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+    from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
     # Classification Report
     class_report = classification_report(y_test, y_pred)
@@ -68,13 +66,6 @@ def visualise_conf_matrix():
 
     # Confusion Matrix
     conf_matrix = confusion_matrix(y_test, y_pred, labels=model.classes_)
-    print('Confusion Matrix:')
-    print(conf_matrix)
-
-    # Accuracy
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f'Accuracy: {accuracy}')
-
     disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=y_test.unique())
     disp.plot(cmap=plt.cm.Blues)
 
@@ -96,10 +87,10 @@ def visualise_feature_distribution_in_genres(data: pd.DataFrame):
         group_df = group_df.drop('target', axis=1)
         # Iterate over features
         for col in group_df.columns:
-            # if col != 'max_spectral_centroid':
-            #     continue
-            feature_values = group_df[col]  # Get values of the current feature
 
+            if col != 'max_spectral_centroid':
+                continue
+            feature_values = group_df[col]  # Get values of the current feature
             # Compute the histogram
             min_val = feature_values.min()
             max_val = feature_values.max()
@@ -124,29 +115,64 @@ def visualise_feature_distribution_in_genres(data: pd.DataFrame):
             plt.tight_layout()
 
             # Save plot
-            plt.savefig('./plots/features_distribution_in_genres/'+col+target.__str__())
+            # plt.savefig('./plots/features_distribution_in_genres/'+col+target.__str__())
+            # plt.savefig('./plots/imputed_spctr_centroid_distribution/' + col + target.__str__())
+
             plt.close()
+            plt.show()
 
 
-if __name__ == '__main__':
-    data = get_data()
-    data = data[data['target'] != 'Queens of the Stone Age']
-    # data = data[data['target'] != 'Blues']
-    # data = data[data['target'] != 'Rap']
-    # to_drop = ['repetitiveness', 'median_spectral_rolloff_high_pitch',
-    #            'accented_Hzs_median', 'loudness_variation', 'note_above_threshold_set']
-    # data.drop(to_drop, axis=1, inplace=True)
-    # data = data[data['max_spectral_centroid'] < 0.9]
-    # data = data[data['max_spectral_centroid'] > 0.1]
-    print(data.columns)
-    # visualise_data(data)
+def remove_noise_from_feature(data: pd.DataFrame, imputed='max_spectral_centroid', leave_predicate=lambda x: x > 0.1 and x < 0.9):
+    #'tempo_variation', 'BPM', 'repetitiveness', 'seconds_duration',
+    # 'loudness_variation', 'max_spectral_centroid',
+    # 'median_spectral_rolloff_high_pitch',
+    # 'median_spectral_rolloff_low_pitch', 'key_changes',
+    # 'note_above_threshold_set', 'percussive_presence',
+    # 'accented_Hzs_median'
+    groups = data.groupby('target')
+    per_target_medians = {}
+    for target, group_df in groups:
+        set_for_median = group_df[imputed].tolist()
+        set_for_median = filter(leave_predicate, set_for_median)
+        per_target_medians[target] = np.median(list(set_for_median))
+        for index, row in group_df.iterrows():
+            if not leave_predicate(row[imputed]):
+                data.at[index, imputed] = per_target_medians[target]
 
+
+def compare_models(data: pd.DataFrame):
+    # Initialize the models
+    modelSVC = SVC()  # works 0.55
+    modelRFC = RandomForestClassifier()  # works 0.65
+    modelGBC = GradientBoostingClassifier()  # works 0.7
+
+    accuracies = [[], [], []]
+    for i in range(10):
+        X_train, y_train, X_test, y_test = get_sets(data, seed=i)
+
+        modelSVC.fit(X_train, y_train)
+        y_pred = modelSVC.predict(X_test)
+        accuracies[0].append(accuracy_score(y_test, y_pred))
+
+        modelRFC.fit(X_train, y_train)
+        y_pred = modelRFC.predict(X_test)
+        accuracies[1].append(accuracy_score(y_test, y_pred))
+
+        modelGBC.fit(X_train, y_train)
+        y_pred = modelGBC.predict(X_test)
+        accuracies[2].append(accuracy_score(y_test, y_pred))
+
+    print('Accuracies:')
+    print('SVC', np.mean(accuracies[0]))
+    print('RFC', np.mean(accuracies[1]))
+    print('GBC', np.mean(accuracies[2]))
+
+
+def compare_imputed(data: pd.DataFrame):
     X_train, y_train, X_test, y_test = get_sets(data)
 
     # Initialize the model
-    # model = SVC()  # works 0.55
-    # model = DecisionTreeClassifier()  # works 0.6
-    # model = RandomForestClassifier()  # works 0.65
+
     model = GradientBoostingClassifier()  # works 0.7
 
     # Fit the model
@@ -155,6 +181,77 @@ if __name__ == '__main__':
     # Predict
     y_pred = model.predict(X_test)
 
-    visualise_conf_matrix()
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f'Accuracy non-imputed: {accuracy}')
 
-    visualise_feature_distribution_in_genres(data)
+
+    remove_noise_from_feature(data)
+    X_train, y_train, X_test, y_test = get_sets(data)
+    model.fit(X_train, y_train)
+
+    #Predict
+    y_pred = model.predict(X_test)
+
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f'Accuracy imputed: {accuracy}')
+
+
+def make_predictions_on_data(data: pd.DataFrame, visualise=False):
+    remove_noise_from_feature(data)
+    X_train, y_train, X_test, y_test = get_sets(data)
+
+    # Initialize the model
+    model = GradientBoostingClassifier()  # works 0.7
+
+    # Fit the model
+    model.fit(X_train, y_train)
+
+    # Tested Prediction
+    y_pred = model.predict(X_test)
+
+    if visualise:
+        visualise_conf_matrix(y_test, y_pred)
+
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f'Accuracy: {accuracy}')
+
+    return model
+
+
+def make_model_on_full_set(data: pd.DataFrame):
+    remove_noise_from_feature(data)
+    X, y = data.drop(['target'], axis=1, inplace=False).copy(), data['target']
+
+    model = GradientBoostingClassifier()  # works 0.7
+
+    # Fit the model
+    model.fit(X, y)
+    return model
+
+
+
+if __name__ == '__main__':
+    # PREPARING THE DATA
+    data = get_data_as_df()
+    qotsa = data[data['target'] == 'Queens of the Stone Age']
+    data = data[data['target'] != 'Queens of the Stone Age']
+
+    # MAKING THE PLOTS
+    # visualise_data(data)
+    # visualise_feature_distribution_in_genres(data)
+
+    # IMPROVING THE MODEL
+    # compare_models(data)
+    # compare_imputed(data)
+
+
+    # CHECKING HOW THE MODEL IS CLASSIFYING
+    # make_predictions_on_data(data, visualise=True)
+
+    # CHECKING WHAT THE MODEL THINKS ABOUT QOTSA
+    model = make_model_on_full_set(data)
+    qotsa.drop(['target'], axis=1, inplace=True)
+    y_pred = model.predict(qotsa)
+    for song, predicated in zip(qotsa.index, y_pred):
+        print(song, predicated)
+

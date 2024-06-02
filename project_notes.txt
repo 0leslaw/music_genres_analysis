@@ -25,3 +25,9 @@ find similarities across genres
 
 find if one authors' pieces are more similar to each other or if they fall
 into different categories
+
+
+Features Problems:
+percussive presence - probably should have been means instead of medians
+note above threshold set length - probably just should have been the variance of occurrences of notes in song
+some features - should have been considered without the ends of the wave
