@@ -48,9 +48,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ALL_FEATURES = ['tempo_variation', 'BPM', 'repetitiveness', 'seconds_duration',
+FEATURE_LABELS = ['tempo_variation', 'BPM', 'repetitiveness', 'seconds_duration',
        'loudness_variation', 'max_spectral_centroid',
        'median_spectral_rolloff_high_pitch',
        'median_spectral_rolloff_low_pitch', 'key_changes',
        'note_above_threshold_set', 'percussive_presence',
        'accented_Hzs_median']
+
+ACCURACY_DELTA_MEANS_PER_DROPPED_FEATURE = {'tempo_variation': -0.005357142857142861, 'BPM': -0.00982142857142857,
+                                            'repetitiveness': 0.00446428571428571, 'seconds_duration': -0.024107142857142848,
+                                            'loudness_variation': -0.007142857142857173, 'max_spectral_centroid': -0.0642857142857143,
+                                            'median_spectral_rolloff_high_pitch': -0.005357142857142871,
+                                            'median_spectral_rolloff_low_pitch': -0.012500000000000022,
+                                            'key_changes': -0.004464285714285731,
+                                            'note_above_threshold_set': -0.011607142857142861,
+                                            'percussive_presence': -0.006250000000000011, 'accented_Hzs_median': -0.02410714285714286}
+
+SET_OF_REMOVED_FEATURES_THAT_IMPROVE_MODEL = {('tempo_variation', 'key_changes', 'note_above_threshold_set'): 0.05357142857142849,
+                                              ('tempo_variation', 'median_spectral_rolloff_low_pitch', 'key_changes', 'note_above_threshold_set'): 0.05357142857142849,
+                                              ('tempo_variation', 'repetitiveness', 'median_spectral_rolloff_high_pitch', 'key_changes', 'note_above_threshold_set'): 0.05357142857142849,
+                                              ('tempo_variation', 'repetitiveness', 'seconds_duration', 'loudness_variation',
+                                               'median_spectral_rolloff_high_pitch', 'median_spectral_rolloff_low_pitch',
+                                               'key_changes', 'note_above_threshold_set'): 0.05357142857142849,
+                                              ('tempo_variation', 'note_above_threshold_set'): 0.044642857142857095}

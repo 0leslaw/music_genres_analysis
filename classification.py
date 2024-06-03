@@ -1,3 +1,6 @@
+import heapq
+import itertools
+
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -55,7 +58,7 @@ def visualise_data(data):
                 plt.show()
 
 
-def visualise_conf_matrix(y_test, y_pred):
+def visualise_conf_matrix(y_test, y_pred, model):
     # Plot the confusion matrix
     from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
@@ -123,12 +126,9 @@ def visualise_feature_distribution_in_genres(data: pd.DataFrame):
 
 
 def remove_noise_from_feature(data: pd.DataFrame, imputed='max_spectral_centroid', leave_predicate=lambda x: x > 0.1 and x < 0.9):
-    #'tempo_variation', 'BPM', 'repetitiveness', 'seconds_duration',
-    # 'loudness_variation', 'max_spectral_centroid',
-    # 'median_spectral_rolloff_high_pitch',
-    # 'median_spectral_rolloff_low_pitch', 'key_changes',
-    # 'note_above_threshold_set', 'percussive_presence',
-    # 'accented_Hzs_median'
+    if imputed not in data.columns:
+        return
+
     groups = data.groupby('target')
     per_target_medians = {}
     for target, group_df in groups:
@@ -196,9 +196,9 @@ def compare_imputed(data: pd.DataFrame):
     print(f'Accuracy imputed: {accuracy}')
 
 
-def make_predictions_on_data(data: pd.DataFrame, visualise=False):
+def make_predictions_on_data(data: pd.DataFrame, visualise=False, seed=0):
     remove_noise_from_feature(data)
-    X_train, y_train, X_test, y_test = get_sets(data)
+    X_train, y_train, X_test, y_test = get_sets(data, seed=seed)
 
     # Initialize the model
     model = GradientBoostingClassifier()  # works 0.7
@@ -210,12 +210,12 @@ def make_predictions_on_data(data: pd.DataFrame, visualise=False):
     y_pred = model.predict(X_test)
 
     if visualise:
-        visualise_conf_matrix(y_test, y_pred)
+        visualise_conf_matrix(y_test, y_pred, model)
 
     accuracy = accuracy_score(y_test, y_pred)
-    print(f'Accuracy: {accuracy}')
+    # print(f'Accuracy: {accuracy}')
 
-    return model
+    return accuracy
 
 
 def make_model_on_full_set(data: pd.DataFrame):
@@ -228,6 +228,31 @@ def make_model_on_full_set(data: pd.DataFrame):
     model.fit(X, y)
     return model
 
+
+def compare_features_drop_mean_deltas(data: pd.DataFrame, seed_range=1):
+    feature_labels = project_globals.FEATURE_LABELS
+    accuracy_deltas = {}
+    for seed in range(seed_range):
+        entire_set_accuracy = make_predictions_on_data(data, seed=seed)
+
+        for i in range(len(feature_labels)):
+            print(i)
+            if i > len(feature_labels) - 3:
+                continue
+            for label in itertools.combinations(feature_labels, i+1):
+                data_dropped = data.drop([*label], axis=1, inplace=False)
+                accuracy = make_predictions_on_data(data_dropped, seed=seed)
+                if label in accuracy_deltas:
+                    accuracy_deltas[label].append(accuracy - entire_set_accuracy)
+                else:
+                    accuracy_deltas[label] = [accuracy - entire_set_accuracy]
+
+    accuracy_deltas_mean = {k: np.mean(v) for k, v in accuracy_deltas.items()}
+
+    largest_items = dict(heapq.nlargest(5, accuracy_deltas_mean.items(), key=lambda item: item[1]))
+    smallest_items = dict(heapq.nsmallest(5, accuracy_deltas_mean.items(), key=lambda item: item[1]))
+    print(largest_items)
+    print(smallest_items)
 
 
 if __name__ == '__main__':
@@ -249,9 +274,11 @@ if __name__ == '__main__':
     # make_predictions_on_data(data, visualise=True)
 
     # CHECKING WHAT THE MODEL THINKS ABOUT QOTSA
-    model = make_model_on_full_set(data)
-    qotsa.drop(['target'], axis=1, inplace=True)
-    y_pred = model.predict(qotsa)
-    for song, predicated in zip(qotsa.index, y_pred):
-        print(song, predicated)
+    # model = make_model_on_full_set(data)
+    # qotsa.drop(['target'], axis=1, inplace=True)
+    # y_pred = model.predict(qotsa)
+    # for song, predicated in zip(qotsa.index, y_pred):
+    #     print(song, predicated)
 
+    # CHECKING WHICH FEATURES DROP CAUSE ACCURACY DECREASE
+    compare_features_drop_mean_deltas(data)
