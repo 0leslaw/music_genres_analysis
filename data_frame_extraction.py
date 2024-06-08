@@ -75,11 +75,19 @@ def get_repetitiveness(y, sr):
 
 @time_it
 def get_note_above_threshold_set(y_harmonic, sample_rate, threshold=0.1):
+    """
+    Counts the occurrences of chroma notes in the song, returns count of those, which were
+    above the threshold
+    :param y_harmonic:
+    :param sample_rate:
+    :param threshold:
+    :return:
+    """
     notes = librosa.feature.chroma_stft(y=y_harmonic, sr=sample_rate)
     accepted_notes_amm = 0
     for row in notes:
-        note_occurances = reduce(lambda acc, x: acc+1 if x == 1 else acc, row)
-        note_proportion = note_occurances/len(notes[0])
+        note_occurrences = reduce(lambda acc, x: acc+1 if x == 1 else acc, row)
+        note_proportion = note_occurrences/len(notes[0])
         if note_proportion > threshold:
             accepted_notes_amm += 1
     return accepted_notes_amm
@@ -87,6 +95,11 @@ def get_note_above_threshold_set(y_harmonic, sample_rate, threshold=0.1):
 
 @time_it
 def extract_custom_features(path):
+    """
+    Extracts all features for the file of allowed format of path = 'path'
+    :param path:
+    :return: features: dictionary of feature_name -> feature_value
+    """
     features = {}
 
     raw_audio_data, sample_rate = librosa.load(path)
@@ -113,6 +126,14 @@ def extract_custom_features(path):
 
 @time_it
 def get_key_changes_broad_estimator(y, sr):
+    """
+    Is somewhat of an abstract estimator, its value increases when
+    the current set of 7 notes in changed (instinct tells us that it
+    might signify change in melodic key or at least the context
+    :param y:
+    :param sr:
+    :return:
+    """
     chroma_gram = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=sr*10)
     note_counts = []
     counter = 0
@@ -130,6 +151,7 @@ def get_key_changes_broad_estimator(y, sr):
 
 @time_it
 def get_median_spectral_rolloff_high_pitch(y, sr):
+    """this will find how low-pitched heavy is our song"""
     return statistics.median(librosa.feature.spectral_rolloff(y=y, sr=sr)[0])
 
 
@@ -141,6 +163,14 @@ def get_median_spectral_rolloff_low_pitch(y, sr):
 
 @time_it
 def get_max_spectral_centroid(y, sr, song_duration):
+    """
+    Finds the proportion of the song at which there is the most
+    concentration of high notes
+    :param y:
+    :param sr:
+    :param song_duration:
+    :return:
+    """
     spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]  # Compute spectral centroid
     max_index = spectral_centroid.argmax()  # Index of maximum spectral centroid
     max_time = librosa.frames_to_time(max_index, sr=sr)  # Convert index to time (in seconds)
@@ -148,7 +178,14 @@ def get_max_spectral_centroid(y, sr, song_duration):
 
 
 @time_it
-def get_loudness_variation_entire_file(y, divisions=30):
+def get_loudness_variation_entire_wave(y, divisions=30):
+    """
+    Tries to estimate the variation of loudness by comparing
+    it across the song parts
+    :param y:
+    :param divisions:
+    :return:
+    """
     loudnesses = []
     # Calculate the RMS energy
     rms = librosa.feature.rms(y=y)[0]
@@ -263,6 +300,9 @@ def get_category_to_filename():
 
 
 def load_example_data_into_pd():
+    """
+    :return: dataframe of features with one of each category
+    """
     categories_to_files = get_category_to_filename()
     rows_as_list_of_dicts = []
     i=0
@@ -283,7 +323,15 @@ def load_example_data_into_pd():
     return data
 
 
-def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, insert=False, skipping_ind=None):
+def save_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, insert=False, skipping_ind=None):
+    """
+    Save extracted data to csv
+    :param csv_path:
+    :param frequency_of_saving:
+    :param insert:
+    :param skipping_ind:
+    :return:
+    """
     categories_to_files = get_category_to_filename()
     rows_as_list_of_dicts = []
     i = 0
@@ -331,7 +379,13 @@ def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, inse
     del rows_as_list_of_dicts
 
 
-def load_full_data_to_csv(csv_path, do_overwrite=True):
+def save_full_data_to_csv(csv_path, do_overwrite=True):
+    """
+    Save extracted data to csv
+    :param csv_path:
+    :param do_overwrite:
+    :return:
+    """
     if os.path.exists(csv_path) and not do_overwrite:
         raise ResourceWarning('overwriting a csv df cancelled')
     categories_to_files = get_category_to_filename()
@@ -390,5 +444,5 @@ if __name__ == '__main__':
     # skipping = skipping.index.tolist()
 
     # THESE ARE THE TWO OPTIONS FOR EXTRACTION
-    # load_full_data_to_csv_frequent_saving(path_for_extraction, insert=True)
-    # load_full_data_to_csv(path_for_extraction, do_overwrite=True)
+    # save_full_data_to_csv_frequent_saving(path_for_extraction, insert=True)
+    # save_full_data_to_csv(path_for_extraction, do_overwrite=True)
