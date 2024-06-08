@@ -8,12 +8,7 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from scipy.stats import probplot
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 
 import project_globals
