@@ -372,8 +372,7 @@ if __name__ == '__main__':
     data = data[data['target'] != 'Blues']
 
     # MAKING THE PLOTS
-    visualise_data(data)
-    visualise_feature_distribution_in_genres(data)
+    # visualise_feature_distribution_in_genres(data)
 
     # IMPROVING THE MODEL
     # compare_models(data)
