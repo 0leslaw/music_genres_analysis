@@ -1,13 +1,14 @@
 possible features:
+(X means it is achieved)
 Xmean BPM median
 Xsong length
 Xtempo variance
 Xmedian spectral centroid - median of weighted means of freq
 Xmedian spectral rolloff - median of freq thresholds under which there is 85% of volume
-repetitiveness
-most common Hz range/s?
-notes set length
-key changes
+Xrepetitiveness
+Xmost common Hz range/s?
+Xnotes set length
+Xkey changes
 chord progressions
 most common rhythmic pattern for a measure (bar)
 Xloudness dynamics (has to take mean dynamic level for a measure

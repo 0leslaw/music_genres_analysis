@@ -18,7 +18,7 @@ import pandas as pd
 import numpy as np
 import project_globals
 
-
+@time_it
 def extract_mfcc_features(path):
     raw_audio_data, sample_rate = librosa.load(path)
     return librosa.feature.mfcc(y=raw_audio_data, sr=sample_rate)
@@ -214,8 +214,8 @@ def visualise_spec(y, sr, name):
     ax.set_title('mel spectrogram for '+name)
     fig.colorbar(img, ax=ax, format=f'%0.2f')
     nu_name = name+str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
-    plt.savefig('./plots/mel_spectrograms'+nu_name)
-    # plt.show()
+    # plt.savefig('./plots/mel_spectrograms'+nu_name)
+    plt.show()
 
 
 def visualise_loudness_rms(y, sr, name):
@@ -234,7 +234,7 @@ def visualise_loudness_rms(y, sr, name):
     plt.title('Loudness Over Time for '+name)
     plt.grid(True)
     plt.legend()
-    plt.savefig('./plots/loudness_over_time/'+name+datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    # plt.savefig('./plots/loudness_over_time/'+name+datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     plt.show()
 
 
@@ -283,14 +283,12 @@ def load_example_data_into_pd():
     return data
 
 
-def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, do_overwrite=False, skipping_ind=None):
-    if os.path.exists(csv_path) and not do_overwrite:
-        raise ResourceWarning('overwriting a csv df cancelled')
+def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, insert=False, skipping_ind=None):
     categories_to_files = get_category_to_filename()
     rows_as_list_of_dicts = []
     i = 0
     is_first = True
-    if do_overwrite:
+    if insert:
         is_first = False
     skip = False
     j = 0
@@ -300,17 +298,12 @@ def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, do_o
             continue
         try:
             for filename in files:
-
-                if j!=459:
-                    j+=1
+                for ind in skipping_ind:
+                    if ind in filename:
+                        skip = True
+                        break
+                if skip:
                     continue
-
-                # for ind in skipping_ind:
-                #     if ind in filename:
-                #         skip = True
-                #         break
-                # if skip:
-                #     continue
 
                 if i == frequency_of_saving:
                     data = pd.DataFrame(rows_as_list_of_dicts)
@@ -331,6 +324,11 @@ def load_full_data_to_csv_frequent_saving(csv_path, frequency_of_saving=10, do_o
                 i += 1
         except:
             print(filename, "EXCEPTION IN LOADING")
+    data = pd.DataFrame(rows_as_list_of_dicts)
+    data.set_index('song_name', inplace=True)
+    data.to_csv(csv_path, mode='a', index=True, header=False)
+    del data
+    del rows_as_list_of_dicts
 
 
 def load_full_data_to_csv(csv_path, do_overwrite=True):
@@ -340,19 +338,9 @@ def load_full_data_to_csv(csv_path, do_overwrite=True):
     rows_as_list_of_dicts = []
     i = 0
     for cat, files in categories_to_files.items():
-
-        if cat != 'Punk':
-            continue
         try:
             for filename in files:
-                # for ind in skipping_ind:
-                #     if ind in filename:
-                #         skip = True
-                #         break
-                # if skip:
-                #     continue
                 row_as_dict = extract_custom_features(filename)
-
                 row_as_dict.update({'target': cat, 'song_name': os.path.basename(filename)})
                 rows_as_list_of_dicts.append(row_as_dict)
                 i += 1
@@ -363,7 +351,7 @@ def load_full_data_to_csv(csv_path, do_overwrite=True):
     data.to_csv(csv_path)
 
 
-def visualise_data():
+def visualise_data_loudness():
     categories_to_files = get_category_to_filename()
     i = 0
     for cat, files in categories_to_files.items():
@@ -386,11 +374,21 @@ def print_how_many_of_genre():
 
 
 if __name__ == '__main__':
+    # !!! ALL FUNCTIONS NECESSARY FOR CARRYING OUT THE EXTRACTION !!! #
+
+    # VISUALISE
     print_how_many_of_genre()
-    # visualise_data()
+    visualise_data_loudness()
+
+    # EXAMPLE OF EXTRACTION
     # data = load_example_data_into_pd()
-    # skipping = pd.read_csv(project_globals.DATA_FRAME_PATH+'2024-05-21_09-09-30', index_col='song_name')
+    # print(data)
+
+    # MAKING SKIPPED INDICES SINCE WE DON'T WANT TO WASTE TIME OVERRIDING THE EXTRACTED ROWS
+    # path_for_extraction = project_globals.DATA_FRAME_PATH + '2024-05-21_09-09-30' # could also be with a different timestamp
+    # skipping = pd.read_csv(path_for_extraction, index_col='song_name')
     # skipping = skipping.index.tolist()
 
-    # load_full_data_to_csv_frequent_saving(project_globals.DATA_FRAME_PATH + '2024-05-21_09-09-30', do_overwrite=True)
-    # load_full_data_to_csv(project_globals.DATA_FRAME_PATH + 'Punk', do_overwrite=True)
+    # THESE ARE THE TWO OPTIONS FOR EXTRACTION
+    # load_full_data_to_csv_frequent_saving(path_for_extraction, insert=True)
+    # load_full_data_to_csv(path_for_extraction, do_overwrite=True)
